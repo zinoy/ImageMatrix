@@ -5,6 +5,8 @@
 	import flash.net.*;
 	import flash.utils.*;
 	import flash.geom.*;
+	
+	import com.probertson.utils.GZIPBytesEncoder;
 
 	public class PixelRootWorker extends Sprite
 	{
@@ -23,6 +25,8 @@
 
 		private function init():void
 		{
+			registerClassAlias("com.zino.PixelObject",PixelObject);
+			
 			removeChild(pMask);
 			pBar.mode = "manual";
 			pBar.setProgress(50,100);
@@ -37,8 +41,8 @@
 			var curX:int = 1;
 			var curY:int = 1;
 			dispRect = new Rectangle();
-			dispRect.width = Math.floor(stage.stageWidth / 3);
-			dispRect.height = Math.floor((stage.stageHeight - 40) / 3);
+			dispRect.width = Math.floor((stage.stageWidth - 1) / 3);
+			dispRect.height = Math.floor(((stage.stageHeight - 1) - 40) / 3);
 
 			pixels = new Vector.<PixelObject>();
 			while (!end)
@@ -72,6 +76,7 @@
 			btnOpen.addEventListener(MouseEvent.CLICK,goFile);
 			btnClear.addEventListener(MouseEvent.CLICK,resetAll);
 			btnEdit.addEventListener(MouseEvent.CLICK,startEdit);
+			addEventListener(MouseEvent.MOUSE_MOVE,dragMouse);
 		}
 
 		private function resetAll(e:MouseEvent=null):void
@@ -106,7 +111,6 @@
 				btnEdit.label = "Edit";
 				btnShuffle.enabled = true;
 				btnOpen.label = "Open file...";
-				removeEventListener(MouseEvent.MOUSE_MOVE,dragMouse);
 				removeEventListener(MouseEvent.MOUSE_DOWN,dragMouse);
 				removeEventListener(MouseEvent.MOUSE_UP,countPixels);
 			}
@@ -115,7 +119,7 @@
 				btnEdit.label = "Done";
 				btnShuffle.enabled = false;
 				btnOpen.label = "Save...";
-				addEventListener(MouseEvent.MOUSE_MOVE,dragMouse);
+				txtTime.text = "";
 				addEventListener(MouseEvent.MOUSE_DOWN,dragMouse);
 				addEventListener(MouseEvent.MOUSE_UP,countPixels);
 			}
@@ -124,9 +128,16 @@
 
 		private function dragMouse(e:MouseEvent):void
 		{
-			if (e.buttonDown)
+			if (e.target is PixelObject)
 			{
-				if (e.target is PixelObject)
+				if (!editMode)
+				{
+					if (e.target.isDefaultColor)
+						txtTime.text = "";
+					else
+						txtTime.text = "#" + zeros(e.target.getColor);
+				}
+				else if (e.buttonDown)
 				{
 					e.target.red();
 				}
@@ -214,7 +225,7 @@
 		{
 			if (editMode)
 			{
-				var str:String = "<?xml version=\"1.0\" encoding=\"utf-8\"?><pixeldoc>";
+				var str:String = "<?xml version=\"1.0\" encoding=\"utf-8\"?><imgdesc><matrix>";
 				for each(var p in pixels)
 				{
 					if (!p.isDefaultColor)
@@ -224,15 +235,14 @@
 						str += it;
 					}
 				}
-				str += "</pixeldoc>";
-				//var xml:XML = XML(str);
+				str += "</matrix></imgdesc>";
 				var d:ByteArray = new ByteArray();
-				//d.writeObject(xml);
 				d.writeMultiByte(str,"utf-8");
-				d.compress();
+				var endr:GZIPBytesEncoder = new GZIPBytesEncoder();
+				var output:ByteArray = endr.compressToByteArray(d);
 				var fs:FileReference = new FileReference();
 				fs.addEventListener(Event.COMPLETE,saved);
-				fs.save(d,".xdi");
+				fs.save(output,".xdi");
 			}
 			else
 			{
@@ -256,10 +266,12 @@
 			var dc:int = 0;
 			resetAll();
 			var d:ByteArray = e.target.data;
+			var orig:ByteArray;
 			if (file.type == ".xdi"){
 				try
 				{
-					d.uncompress();
+					var endr:GZIPBytesEncoder = new GZIPBytesEncoder();
+					orig = endr.uncompressToByteArray(d);
 				}
 				catch(err)
 				{
@@ -275,15 +287,27 @@
 				loader.loadBytes(d);
 				return;
 			}
-			var xml:XML = XML(d);
-			if (xml.name() != "pixeldoc") {
+			else
+			{
+				orig = d;
+			}
+			var xml:XML = XML(orig);
+			if (xml.name() != "imgdesc")
+			{
 				txtTime.text = "Invaild file!";
 				return;
 			}
-			for each(var item in xml.pixel)
+			var imgrect:Rectangle = new Rectangle(0,0,xml.info.dimension.@width,xml.info.dimension.@height);
+			var offset:Point = new Point();
+			if (!imgrect.isEmpty())
 			{
-				var fx:int = Number(item.@x);
-				var fy:int = Number(item.@y);
+				offset.x = Math.floor((dispRect.width - imgrect.width) / 2);
+				offset.y = Math.floor((dispRect.height - imgrect.height) / 2);
+			}
+			for each(var item in xml.matrix.pixel)
+			{
+				var fx:int = Number(item.@x) + offset.x;
+				var fy:int = Number(item.@y) + offset.y;
 				var p:PixelObject = fromCoordinate(fx,fy);
 				if (p != null)
 				{
@@ -324,12 +348,16 @@
 				fit = bmp.bitmapData;
 			}
 			
+			var offset:Point = new Point();
+			offset.x = Math.floor((dispRect.width - fit.width) / 2);
+			offset.y = Math.floor((dispRect.height - fit.height) / 2);
+			
 			var count:int = 0;
 			for (var i:int = 0;i<fit.height;i++)
 			{
 				for (var j:int = 0;j<fit.width;j++)
 				{
-					var p:PixelObject = fromCoordinate(j,i);
+					var p:PixelObject = fromCoordinate(j + offset.x,i + offset.y);
 					var argb:uint = fit.getPixel32(j,i);
 					var a:Number = Math.floor(argb / 0x1000000) / 0xff;
 					var c:uint = argb % 0x1000000;
@@ -344,6 +372,16 @@
 		private function error(e:IOErrorEvent):void
 		{
 			txtTime.text = "Invaild image file!";
+		}
+		
+		private function zeros(num:uint):String
+		{
+			var nt:String = num.toString(16);
+			while (nt.length < 6)
+			{
+				nt = "0" + nt;
+			}
+			return nt;
 		}
 
 	}
