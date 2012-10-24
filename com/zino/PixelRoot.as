@@ -15,6 +15,7 @@
 		var defcolor:uint = 0;
 		var time:int;
 		var dispRect:Rectangle;
+		var pos:Point;
 
 		public function PixelRoot()
 		{
@@ -186,11 +187,11 @@
 
 		private function fromCoordinate(posX:int,posY:int):PixelObject
 		{
-			if (posX >= lineCount)
+			if (posX >= lineCount || posX < 0)
 			{
 				return null;
 			}
-			if (posY >= pixels.length / lineCount)
+			if (posY >= pixels.length / lineCount || posY < 0)
 			{
 				return null;
 			}
@@ -250,7 +251,6 @@
 		{
 			time = getTimer();
 			var dc:int = 0;
-			resetAll();
 			var d:ByteArray = e.target.data;
 			if (file.type == ".xdi"){
 				try
@@ -320,21 +320,52 @@
 				fit = bmp.bitmapData;
 			}
 			
-			var count:int = 0;
-			for (var i:int = 0;i<fit.height;i++)
-			{
-				for (var j:int = 0;j<fit.width;j++)
-				{
-					var p:PixelObject = fromCoordinate(j,i);
-					var argb:uint = fit.getPixel32(j,i);
-					var a:Number = Math.floor(argb / 0x1000000) / 0xff;
-					var c:uint = argb % 0x1000000;
-					p.setColor(c,a);
-					count++;
-				}
-			}
+			pos = new Point(dispRect.width,0);
+			
+			loop(fit);
+		}
+		
+		private function loop(source:BitmapData):void
+		{
+			resetAll();
+			if (pos.x < -dispRect.width)
+				pos.x = dispRect.width + 1;
+			var count:int = drawImage(source,pos);
+			pos.x-=3;
 			txtTime.text = (getTimer() - time) / 1000 + "sec";
 			txtInfo.text = Utility.addCommas(count) + "/" + Utility.addCommas(pixels.length);
+			setTimeout(loop,1000,source);
+			time = getTimer();
+		}
+		
+		private function drawImage(source:BitmapData,offset:Point=null):int
+		{
+			if (offset == null)
+			{
+				offset = new Point();
+				offset.x = Math.floor((dispRect.width - source.width) / 2);
+				offset.y = Math.floor((dispRect.height - source.height) / 2);
+			}
+			var count:int = 0;
+			for (var i:int = 0;i<source.height;i++)
+			{
+				for (var j:int = 0;j<source.width;j++)
+				{
+					var p:PixelObject = fromCoordinate(j + offset.x,i + offset.y);
+					if (p != null)
+					{
+						var argb:uint = source.getPixel32(j,i);
+						var a:Number = Math.floor(argb / 0x1000000) / 0xff;
+						if (a == 0)
+							continue;
+						//var c:uint = argb % 0x1000000;
+						//p.setColor(c,a);
+						p.green();
+						count++;
+					}
+				}
+			}
+			return count;
 		}
 		
 		private function error(e:IOErrorEvent):void
