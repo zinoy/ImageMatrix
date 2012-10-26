@@ -15,7 +15,10 @@
 		var defcolor:uint = 0;
 		var time:int;
 		var dispRect:Rectangle;
+		var loadedImg:BitmapData;
 		var pos:Point;
+		var tobj:uint;
+		var idxlist:Array;
 
 		public function PixelRoot()
 		{
@@ -60,7 +63,13 @@
 					end = true;
 				}
 			}
-			txtInfo.text = lineCount + "x" + (pixels.length / lineCount);
+			idxlist = new Array(pixels.length);
+			for (var idx in pixels)
+			{
+				idxlist[idx] = idx;
+			}
+			
+			//txtInfo.text = lineCount + "x" + (pixels.length / lineCount);
 			file = new FileReference();
 			file.addEventListener(Event.SELECT,getFile);
 			file.addEventListener(Event.COMPLETE,showFile);
@@ -69,10 +78,13 @@
 			btnOpen.addEventListener(MouseEvent.CLICK,goFile);
 			btnClear.addEventListener(MouseEvent.CLICK,resetAll);
 			btnEdit.addEventListener(MouseEvent.CLICK,startEdit);
+			btnPlay.addEventListener(MouseEvent.CLICK,toggleMotion);
+			btnBlink.addEventListener(MouseEvent.CLICK,goBlink);
 		}
 
 		private function resetAll(e:MouseEvent=null):void
 		{
+			clearTimeout(tobj);
 			for each(var p in pixels)
 			{
 				if (!p.isDefaultColor)
@@ -80,7 +92,7 @@
 					p.reset();
 				}
 			}
-			txtInfo.text = "0/" + Utility.addCommas(pixels.length);
+			//txtInfo.text = "0/" + Utility.addCommas(pixels.length);
 		}
 
 		private function countPixels(e:MouseEvent=null):void
@@ -93,7 +105,7 @@
 					count++;
 				}
 			}
-			txtInfo.text = Utility.addCommas(count) + "/" + Utility.addCommas(pixels.length);
+			//txtInfo.text = Utility.addCommas(count) + "/" + Utility.addCommas(pixels.length);
 		}
 
 		private function startEdit(e:MouseEvent):void
@@ -102,7 +114,9 @@
 			{
 				btnEdit.label = "Edit";
 				btnShuffle.enabled = true;
-				btnOpen.label = "Open file...";
+				btnOpen.label = "Open...";
+				if (loadedImg != null)
+					btnPlay.enabled = true;
 				removeEventListener(MouseEvent.MOUSE_MOVE,dragMouse);
 				removeEventListener(MouseEvent.MOUSE_DOWN,dragMouse);
 				removeEventListener(MouseEvent.MOUSE_UP,countPixels);
@@ -112,6 +126,9 @@
 				btnEdit.label = "Done";
 				btnShuffle.enabled = false;
 				btnOpen.label = "Save...";
+				btnPlay.label = "Play";
+				btnPlay.enabled = false;
+				clearTimeout(tobj);
 				addEventListener(MouseEvent.MOUSE_MOVE,dragMouse);
 				addEventListener(MouseEvent.MOUSE_DOWN,dragMouse);
 				addEventListener(MouseEvent.MOUSE_UP,countPixels);
@@ -182,7 +199,7 @@
 				}
 			}
 			txtTime.text = (getTimer()-time)/1000+"sec";
-			txtInfo.text = Utility.addCommas(count) + "/" + Utility.addCommas(pixels.length);
+			//txtInfo.text = Utility.addCommas(count) + "/" + Utility.addCommas(pixels.length);
 		}
 
 		private function fromCoordinate(posX:int,posY:int):PixelObject
@@ -291,14 +308,16 @@
 				}
 			}
 			txtTime.text = (getTimer() - time) / 1000 + "sec";
-			txtInfo.text = Utility.addCommas(xml.pixel.length()) + "/" + Utility.addCommas(pixels.length);
+			//txtInfo.text = Utility.addCommas(xml.pixel.length()) + "/" + Utility.addCommas(pixels.length);
 		}
 		
 		private function showImage(e:Event):void
 		{
+			clearTimeout(tobj);
+			resetAll();
 			var loader:LoaderInfo = LoaderInfo(e.target);
 			var bmp:Bitmap = loader.content as Bitmap;
-			var fit:BitmapData;
+			var bmd:BitmapData;
 			if (bmp.width > dispRect.width || bmp.height > dispRect.height)
 			{
 				var r1:Number = bmp.width / bmp.height;
@@ -312,29 +331,48 @@
 				var nh:Number = Math.round(bmp.height*ratio);
 				var matrix:Matrix = new Matrix();
 				matrix.scale(ratio,ratio);
-				fit = new BitmapData(nw,nh,true,0);
-				fit.draw(bmp.bitmapData, matrix, null, null, null, true);
+				bmd = new BitmapData(nw,nh,true,0);
+				bmd.draw(bmp.bitmapData, matrix, null, null, null, true);
 			}
 			else
 			{
-				fit = bmp.bitmapData;
+				bmd = bmp.bitmapData;
+			}
+			if (cbCrop.selected)
+			{
+				var s:Number = Math.min(bmd.width,bmd.height);
+				loadedImg = new BitmapData(s,s,true,0);
+				var b:Bitmap = new Bitmap(bmd);
+				var m:Shape = new Shape();
+				m.graphics.beginFill(0x00FF00);
+				m.graphics.drawCircle(s/2,s/2,s/2);
+				m.graphics.endFill();
+				b.mask = m;
+				loadedImg.draw(b);
+			}
+			else
+			{
+				loadedImg = bmd;
 			}
 			
-			pos = new Point(dispRect.width,0);
+			pos = new Point(Math.round((dispRect.width - loadedImg.width) / 2),Math.round((dispRect.height - loadedImg.height) / 2));
 			
-			loop(fit);
+			//loop(loadedImg);
+			var count:int = drawImage(loadedImg,pos);
+			txtTime.text = (getTimer() - time) / 1000 + "sec";
+			btnPlay.enabled = true;
 		}
 		
 		private function loop(source:BitmapData):void
 		{
 			resetAll();
-			if (pos.x < -dispRect.width)
+			if (pos.x < -source.width)
 				pos.x = dispRect.width + 1;
 			var count:int = drawImage(source,pos);
-			pos.x-=3;
+			pos.x-=5;
 			txtTime.text = (getTimer() - time) / 1000 + "sec";
-			txtInfo.text = Utility.addCommas(count) + "/" + Utility.addCommas(pixels.length);
-			setTimeout(loop,1000,source);
+			//txtInfo.text = Utility.addCommas(count) + "/" + Utility.addCommas(pixels.length);
+			tobj = setTimeout(loop,100,source);
 			time = getTimer();
 		}
 		
@@ -358,9 +396,8 @@
 						var a:Number = Math.floor(argb / 0x1000000) / 0xff;
 						if (a == 0)
 							continue;
-						//var c:uint = argb % 0x1000000;
-						//p.setColor(c,a);
-						p.green();
+						var c:uint = argb % 0x1000000;
+						p.setColor(c,a);
 						count++;
 					}
 				}
@@ -368,11 +405,69 @@
 			return count;
 		}
 		
+		private function toggleMotion(e:MouseEvent):void
+		{
+			if (btnPlay.label == "Play")
+			{
+				loop(loadedImg);
+				btnPlay.label = "Pause";
+			}
+			else
+			{
+				clearTimeout(tobj);
+				btnPlay.label = "Play";
+			}
+		}
+		
+		private function goBlink(e:MouseEvent):void
+		{
+			clearTimeout(tobj);
+			showBlink();
+		}
+		
+		private function showBlink():void
+		{
+			var seed:Array = idxlist.slice();
+			seed = shuffle(seed,500);
+			for each(var idx in seed)
+			{
+				pixels[idx].setColor(0xFFFFFF);
+				setTimeout(pixels[idx].reset,150);
+			}
+			tobj = setTimeout(showBlink,50);
+		}
+		
 		private function error(e:IOErrorEvent):void
 		{
 			txtTime.text = "Invaild image file!";
 		}
+		
+		private function getRandNumber(min:int,max:int=0):int
+		{
+			if (max == 0)
+			{
+				max = min;
+				min = 0;
+			}
+			return Math.floor(Math.random() * (max - min) + min);
+		}
+		
+		public static function shuffle(arr:Array,len:int=0):Array
+		{
+			var arr2:Array = [];
 
+			while (arr.length > 0)
+			{
+				arr2.push(arr.splice(Math.round(Math.random() * (arr.length - 1)), 1)[0]);
+				if (len > 0 && arr2.length >= len)
+				{
+					arr2.concat(arr);
+					break;
+				}
+			}
+			return arr2;
+		}
+		
 	}
 
 }
