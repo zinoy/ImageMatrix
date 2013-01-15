@@ -6,6 +6,8 @@
 	import flash.utils.*;
 	import flash.geom.*;
 	
+	import com.hurlant.util.*;
+	
 	public class PixelRoot extends Sprite
 	{
 		var pixels:Vector.<PixelObject>;
@@ -228,7 +230,8 @@
 		{
 			if (editMode)
 			{
-				var str:String = "<?xml version=\"1.0\" encoding=\"utf-8\"?><pixeldoc>";
+				saveAsTiff();
+				/*var str:String = "<?xml version=\"1.0\" encoding=\"utf-8\"?><pixeldoc>";
 				for each(var p in pixels)
 				{
 					if (!p.isDefaultColor)
@@ -246,12 +249,128 @@
 				d.compress();
 				var fs:FileReference = new FileReference();
 				fs.addEventListener(Event.COMPLETE,saved);
-				fs.save(d,".xdi");
+				fs.save(d,".xdi");*/
 			}
 			else
 			{
 				file.browse([new FileFilter("Image File","*.bmp;*.jpg;*png;*.gif"),new FileFilter("XML Description File","*.xml;*.xdi")]);
 			}
+		}
+		
+		private function saveAsTiff():void
+		{
+			var d:ByteArray = new ByteArray();
+			d.endian = Endian.LITTLE_ENDIAN;
+			d.writeShort(0x4949)
+			d.writeShort(0x002a);
+			d.writeUnsignedInt(0x8);
+			d.writeShort(0xe);//Number of Interoperability
+			
+			d.writeShort(0xfe);
+			d.writeShort(0x4);
+			d.writeUnsignedInt(0x1);
+			d.writeUnsignedInt(0);
+			
+			d.writeShort(0x100);
+			d.writeShort(0x3);
+			d.writeUnsignedInt(0x1);
+			d.writeUnsignedInt(lineCount);
+			
+			d.writeShort(0x101)
+			d.writeShort(0x3);
+			d.writeUnsignedInt(0x1);
+			d.writeUnsignedInt(pixels.length/lineCount);
+			
+			d.writeShort(0x102)
+			d.writeShort(0x3);
+			d.writeUnsignedInt(0x3);
+			d.writeUnsignedInt(0xb6);//BitsPerSample
+
+			d.writeShort(0x103)
+			d.writeShort(0x3);
+			d.writeUnsignedInt(0x1);
+			d.writeUnsignedInt(0x1);
+
+			d.writeShort(0x106)
+			d.writeShort(0x3);
+			d.writeUnsignedInt(0x1);
+			d.writeUnsignedInt(0x2);
+
+			d.writeShort(0x111)
+			d.writeShort(0x4);
+			d.writeUnsignedInt(0x1);
+			d.writeUnsignedInt(0xcc);//StripOffsets
+
+			d.writeShort(0x115)
+			d.writeShort(0x3);
+			d.writeUnsignedInt(0x1);
+			d.writeUnsignedInt(0x3);
+
+			d.writeShort(0x116)
+			d.writeShort(0x3);
+			d.writeUnsignedInt(0x1);
+			d.writeUnsignedInt(pixels.length/lineCount);//RowsPerStrip
+
+			d.writeShort(0x117)
+			d.writeShort(0x4);
+			d.writeUnsignedInt(0x1);
+			d.writeUnsignedInt(pixels.length * 3);
+
+			d.writeShort(0x11a)
+			d.writeShort(0x5);
+			d.writeUnsignedInt(0x1);
+			d.writeUnsignedInt(0xbc);//XResolution
+
+			d.writeShort(0x11b)
+			d.writeShort(0x5);
+			d.writeUnsignedInt(0x1);
+			d.writeUnsignedInt(0xc4);//YResolution
+
+			d.writeShort(0x128)
+			d.writeShort(0x3);
+			d.writeUnsignedInt(0x1);
+			d.writeUnsignedInt(0x2);
+			
+			d.writeShort(0x8769)
+			d.writeShort(0x4);
+			d.writeUnsignedInt(0x1);
+			d.writeUnsignedInt(0x11e05);//Exif IFD Pointer
+
+			d.writeUnsignedInt(0);
+			
+			d.writeShort(0x8);
+			d.writeShort(0x8);
+			d.writeShort(0x8);
+			
+			d.writeUnsignedInt(72);
+			d.writeUnsignedInt(1);
+
+			d.writeUnsignedInt(72);
+			d.writeUnsignedInt(1);
+			
+			for each(var p:PixelObject in pixels)
+			{
+				var c:uint = p.getColor;
+				d.writeByte(c>>16);
+				d.writeByte(c>>8);
+				d.writeByte(c);
+			}
+			
+			d.writeShort(0x1)
+			
+			d.writeShort(0x9000)
+			d.writeShort(0x7);
+			d.writeUnsignedInt(0x4);
+			d.writeMultiByte("0221","gb2312");
+			
+			d.writeUnsignedInt(0);
+			
+			trace((d.length-1).toString(16));
+			trace((pixels.length * 3).toString(16));
+			
+			var fs:FileReference = new FileReference();
+			fs.addEventListener(Event.COMPLETE,saved);
+			fs.save(d,".tif");
 		}
 		
 		private function saved(e:Event):void

@@ -5,12 +5,12 @@
 
 	public class PixelObject extends Sprite
 	{
-		var pixel:Bitmap;
-		var _bm:BitmapData;
-		var _color:uint;
-		var _alpha:Number = 1;
-		var _default:Boolean = true;
-		var _lightcolor:uint;
+		private var pixel:Bitmap;
+		private var _bm:BitmapData;
+		private var _color:uint;
+		private var _alpha:Number = 1;
+		private var _default:Boolean = true;
+		private var _lightcolor:uint;
 
 		public function get isDefaultColor():Boolean
 		{
